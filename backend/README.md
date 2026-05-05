@@ -198,6 +198,68 @@ curl -X POST http://localhost:3000/auth/register \
   }'
 
 # Contraseña sin mayúscula
+```
+
+## Chat con IA
+
+### Endpoint HTTP
+
+POST `/api/v1/chat/sessions`
+
+- Requiere `Authorization: Bearer <jwt_token>`
+- Permite generar la sesión inicial del chat con IA
+
+Ejemplo de body:
+
+```json
+{
+  "mensaje_inicial": "Me siento muy abrumado y necesito apoyo"
+}
+```
+
+### WebSocket
+
+Namespace: `/chat`
+
+Conexión:
+
+```ts
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000/chat', {
+  auth: {
+    token: localStorage.getItem('accessToken'),
+  },
+});
+```
+
+Eventos:
+
+- `chat:message` (cliente → servidor)
+  - `sesion_id`: string
+  - `mensaje`: string
+  - `timestamp`: ISO 8601
+
+- `chat:response` (servidor → cliente)
+  - `sesion_id`: string
+  - `chunk`: string
+  - `is_final`: boolean
+  - `score_riesgo?`: number
+  - `timestamp`: ISO 8601
+
+- `chat:error` (servidor → cliente)
+  - `message`: string
+
+### Respuestas de error relevantes
+
+| Código | Situación | Respuesta |
+|--------|-----------|-----------|
+| 400 | Mensaje inválido | `{ message: "Mensaje inválido" }` |
+| 401 | Token inválido/expirado | `{ message: "Token inválido o expirado. Por favor inicia sesión." }` |
+| 403 | Cuenta inactiva | `{ message: "Debes confirmar tu email para acceder al chat." }` |
+| 429 | Rate limit excedido | `{ message: "Has alcanzado el límite de sesiones. Espera 1 hora." }` |
+| 503 | LLM no disponible | `{ message: "El asistente no está disponible. Intenta en unos minutos." }` |
+
 curl -X POST http://localhost:3000/auth/register \
   -H "Content-Type: application/json" \
   -d '{

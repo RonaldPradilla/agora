@@ -1,3 +1,5 @@
+import ChatWindow from './ChatWindow';
+
 interface Props {
   onLogout: () => void;
 }
@@ -9,13 +11,18 @@ export default function Dashboard({ onLogout }: Props) {
   }
 
   return (
-    <div className="register-card">
-      <h1 className="register-title">Bienvenido a Ágora</h1>
-      <p className="register-subtitle">Sesión iniciada correctamente.</p>
-      <div className="alert alert-success">Tu cuenta está activa y autenticada.</div>
-      <button className="btn-primary" onClick={handleLogout}>
-        Cerrar sesión
-      </button>
-    </div>
+    <main className="dashboard-layout">
+      <header className="dashboard-header">
+        <div>
+          <h1 className="register-title">Bienvenido a Ágora</h1>
+          <p className="register-subtitle">Tu espacio de apoyo emocional en tiempo real.</p>
+        </div>
+        <button className="btn-primary" onClick={handleLogout}>
+          Cerrar sesión
+        </button>
+      </header>
+
+      <ChatWindow />
+    </main>
   );
 }

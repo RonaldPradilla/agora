@@ -16,6 +16,9 @@ model Usuario {
 
   sesiones        Sesion[]
   metas           MetaAceptada[]
+  chatSesiones    ChatSesion[]
+  memoriasIA      MemoriaIA[]
+  alertas         Alerta[]
 
   @@map("usuarios")
 }
@@ -41,4 +44,82 @@ model MetaAceptada {
   usuario    Usuario  @relation(fields: [usuario_ID], references: [id], onDelete: Cascade)
 
   @@map("metas_aceptadas")
+}
+
+model ChatSesion {
+  id            String      @id @default(uuid())
+  usuario_id    String
+  estado        EstadoSesion @default(activa)
+  fecha_inicio  DateTime    @default(now())
+  fecha_fin     DateTime?
+  contexto_ia   Json?
+  mensajes      ChatMensaje[]
+  alertas       Alerta[]
+  usuario       Usuario     @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("chat_sesiones")
+}
+
+model ChatMensaje {
+  id          String    @id @default(uuid())
+  sesion_id   String
+  sesion      ChatSesion @relation(fields: [sesion_id], references: [id], onDelete: Cascade)
+  remitente   Remitente
+  contenido   String
+  iv          String
+  auth_tag    String
+  timestamp   DateTime  @default(now())
+  score_riesgo Float?
+
+  @@map("chat_mensajes")
+}
+
+model MemoriaIA {
+  id          String   @id @default(uuid())
+  usuario_id  String
+  contexto    String
+  relevancia  Float    @default(0.5)
+  activo      Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  usuario     Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("memoria_ia")
+}
+
+model Alerta {
+  id            String       @id @default(uuid())
+  usuario_id    String
+  sesion_id     String
+  score         Float
+  palabras_clave Json
+  estado        EstadoAlerta @default(pendiente)
+  creado_en     DateTime     @default(now())
+  resuelto_en   DateTime?
+  resuelto_por  String?
+
+  usuario       Usuario      @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  sesion        ChatSesion    @relation(fields: [sesion_id], references: [id], onDelete: Cascade)
+
+  @@map("alertas")
+}
+
+enum EstadoSesion {
+  activa
+  cerrada_por_usuario
+  cerrada_por_timeout
+  cerrada_por_sistema
+}
+
+enum Remitente {
+  usuario
+  ia
+}
+
+enum EstadoAlerta {
+  pendiente
+  en_revision
+  resuelta
+  falsa_positiva
 }

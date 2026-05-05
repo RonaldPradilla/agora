@@ -3,6 +3,7 @@ import {
   BadRequestException,
   UnauthorizedException,
   InternalServerErrorException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -109,6 +110,31 @@ export class AuthService {
       this.logger.error(`Error durante login: ${err.message}`, err.stack);
       throw new InternalServerErrorException({ message: 'Error interno. Intenta más tarde.' });
     }
+  }
+
+  async verifyAccessToken(token: string): Promise<{ sub: string; type: string }> {
+    const secret = this.configService.get<string>('JWT_SECRET');
+    if (!secret) throw new Error('JWT_SECRET no configurado');
+
+    try {
+      const payload = this.jwtService.verify<{ sub: string; type: string }>(token, { secret });
+      if (!payload?.sub || payload.type !== 'acceso') {
+        throw new UnauthorizedException({ message: 'Token inválido o expirado. Por favor inicia sesión.' });
+      }
+      return payload;
+    } catch (error) {
+      throw new UnauthorizedException({ message: 'Token inválido o expirado. Por favor inicia sesión.' });
+    }
+  }
+
+  async getActiveUser(usuarioId: string) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+    });
+    if (!usuario || !usuario.cuenta_activa) {
+      throw new ForbiddenException({ message: 'Debes confirmar tu email para acceder al chat.' });
+    }
+    return usuario;
   }
 
   private hashSHA256(text: string): string {
