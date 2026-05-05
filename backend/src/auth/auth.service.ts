@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  UnauthorizedException,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
@@ -8,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,10 +28,8 @@ export class AuthService {
     try {
       const { email, password } = registerDto;
 
-      // Paso 1: Calcular hash del email (nunca se almacena en texto plano)
       const emailHash = this.hashSHA256(email);
 
-      // Paso 2: Verificar unicidad del email por hash
       const existingUser = await this.prisma.usuario.findUnique({
         where: { email_hash: emailHash },
       });
@@ -40,11 +40,9 @@ export class AuthService {
         });
       }
 
-      // Paso 3: Generar UUID v4 y hash de contraseña con bcrypt (factor 12)
       const usuarioId = uuidv4();
       const passwordHash = await bcrypt.hash(password, 12);
 
-      // Paso 4: Crear usuario en BD con cuenta inactiva
       await this.prisma.usuario.create({
         data: {
           id: usuarioId,
@@ -57,10 +55,8 @@ export class AuthService {
 
       this.logger.log(`Usuario creado: ${usuarioId}`);
 
-      // Paso 5: Generar token JWT de verificación
       const jwtToken = this.generateVerificationToken(usuarioId);
 
-      // Paso 6: Guardar token en BD
       await this.prisma.token.create({
         data: {
           id: uuidv4(),
@@ -72,22 +68,64 @@ export class AuthService {
         },
       });
 
-      this.logger.log(`Token de verificación creado para usuario: ${usuarioId}`);
-
-      return {
-        message: 'Cuenta creada. Revisa tu correo para confirmar.',
-      };
+      return { message: 'Cuenta creada. Revisa tu correo para confirmar.' };
     } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
+      if (error instanceof BadRequestException) throw error;
 
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error(`Error durante registro: ${err.message}`, err.stack);
+      throw new InternalServerErrorException({ message: 'Error interno. Intenta más tarde.' });
+    }
+  }
 
-      throw new InternalServerErrorException({
-        message: 'Error interno. Intenta más tarde.',
+  async login(loginDto: LoginDto): Promise<{ accessToken: string; message: string }> {
+    try {
+      const { email, password } = loginDto;
+
+      const emailHash = this.hashSHA256(email);
+
+      const usuario = await this.prisma.usuario.findUnique({
+        where: { email_hash: emailHash },
       });
+
+      // Mismo mensaje para usuario no encontrado y contraseña incorrecta (evita enumeración)
+      if (!usuario) {
+        throw new UnauthorizedException({ message: 'Credenciales inválidas' });
+      }
+
+      const passwordMatch = await bcrypt.compare(password, usuario.password_hash);
+      if (!passwordMatch) {
+        throw new UnauthorizedException({ message: 'Credenciales inválidas' });
+      }
+
+      if (!usuario.cuenta_activa) {
+        throw new UnauthorizedException({
+          message: 'Cuenta no verificada. Revisa tu correo para activarla.',
+        });
+      }
+
+      // Generar token de acceso
+      const accessToken = this.generateAccessToken(usuario.id);
+
+      // Guardar sesión en BD
+      await this.prisma.sesion.create({
+        data: {
+          id: uuidv4(),
+          usuario_ID: usuario.id,
+          token: accessToken,
+          expira_en: new Date(Date.now() + 8 * 60 * 60 * 1000), // 8 horas
+        },
+      });
+
+      this.logger.log(`Sesión iniciada: ${usuario.id}`);
+
+      return { accessToken, message: 'Sesión iniciada correctamente.' };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error(`Error durante login: ${err.message}`, err.stack);
+      throw new InternalServerErrorException({ message: 'Error interno. Intenta más tarde.' });
     }
   }
 
@@ -97,60 +135,41 @@ export class AuthService {
 
   private generateVerificationToken(usuarioId: string): string {
     const payload = { sub: usuarioId, type: 'verificacion' };
-
     const secret = this.configService.get<string>('JWT_VERIFICATION_SECRET');
-    if (!secret) {
-      throw new Error('JWT_VERIFICATION_SECRET no configurado');
-    }
-
+    if (!secret) throw new Error('JWT_VERIFICATION_SECRET no configurado');
     return this.jwtService.sign(payload, { secret, expiresIn: '24h' });
+  }
+
+  private generateAccessToken(usuarioId: string): string {
+    const payload = { sub: usuarioId, type: 'acceso' };
+    const secret = this.configService.get<string>('JWT_SECRET');
+    if (!secret) throw new Error('JWT_SECRET no configurado');
+    return this.jwtService.sign(payload, { secret, expiresIn: '8h' });
   }
 
   async verifyEmail(token: string): Promise<{ message: string }> {
     try {
       const secret = this.configService.get<string>('JWT_VERIFICATION_SECRET');
-
       const payload: any = this.jwtService.verify(token, { secret });
 
       if (payload.type !== 'verificacion') {
         throw new BadRequestException('Token inválido');
       }
 
-      const savedToken = await this.prisma.token.findUnique({
-        where: { token },
-      });
+      const savedToken = await this.prisma.token.findUnique({ where: { token } });
 
-      if (!savedToken) {
-        throw new BadRequestException('Token no encontrado');
-      }
+      if (!savedToken) throw new BadRequestException('Token no encontrado');
+      if (savedToken.usado) throw new BadRequestException('Token ya fue utilizado');
+      if (new Date() > savedToken.expira_en) throw new BadRequestException('Token expirado');
 
-      if (savedToken.usado) {
-        throw new BadRequestException('Token ya fue utilizado');
-      }
-
-      if (new Date() > savedToken.expira_en) {
-        throw new BadRequestException('Token expirado');
-      }
-
-      await this.prisma.token.update({
-        where: { id: savedToken.id },
-        data: { usado: true },
-      });
-
-      await this.prisma.usuario.update({
-        where: { id: payload.sub },
-        data: { cuenta_activa: true },
-      });
+      await this.prisma.token.update({ where: { id: savedToken.id }, data: { usado: true } });
+      await this.prisma.usuario.update({ where: { id: payload.sub }, data: { cuenta_activa: true } });
 
       this.logger.log(`Cuenta verificada: ${payload.sub}`);
 
-      return {
-        message: 'Correo verificado exitosamente. Ya puedes iniciar sesión.',
-      };
+      return { message: 'Correo verificado exitosamente. Ya puedes iniciar sesión.' };
     } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
+      if (error instanceof BadRequestException) throw error;
 
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error(`Error verificando email: ${err.message}`);

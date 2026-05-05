@@ -43,7 +43,7 @@ model Token {
 model Sesion {
   id         String   @id @default(uuid())
   usuario_ID String
-  token      String   @unique
+  token      String   @unique @db.VarChar(512)
   expira_en  DateTime
   creado_en  DateTime @default(now())
   

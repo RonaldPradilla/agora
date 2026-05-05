@@ -13,6 +13,16 @@ export interface RegisterPayload {
   confirmPassword: string;
 }
 
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  message: string;
+}
+
 export interface RegisterResponse {
   message: string;
 }
@@ -22,15 +32,16 @@ export async function register(payload: RegisterPayload): Promise<RegisterRespon
   return res.data;
 }
 
+export async function login(payload: LoginPayload): Promise<LoginResponse> {
+  const res = await api.post<LoginResponse>('/auth/login', payload);
+  return res.data;
+}
+
 export function extractErrors(error: unknown): FieldError[] | string {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data;
-    if (data?.errors && Array.isArray(data.errors)) {
-      return data.errors as FieldError[];
-    }
-    if (data?.message) {
-      return data.message as string;
-    }
+    if (data?.errors && Array.isArray(data.errors)) return data.errors as FieldError[];
+    if (data?.message) return data.message as string;
   }
   return 'Error inesperado. Intenta más tarde.';
 }

@@ -1,3 +1,33 @@
+/* Auth wrapper */
+.auth-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 440px;
+}
+
+.auth-switch {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  text-decoration: underline;
+  font-family: var(--sans);
+}
+
+.link-btn:hover {
+  opacity: 0.8;
+}
+
 /* Layout */
 .app-layout {
   min-height: 100svh;
