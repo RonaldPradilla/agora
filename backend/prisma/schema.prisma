@@ -27,7 +27,7 @@ model Usuario {
 
 model Token {
   id         String   @id @default(uuid())
-  token      String   @unique
+  token      String   @unique @db.VarChar(512)
   tipo       String   // 'verificacion' o 'acceso'
   usuario_ID String
   expira_en  DateTime
