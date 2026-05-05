@@ -48,27 +48,14 @@ export class AuthService {
           id: usuarioId,
           email_hash: emailHash,
           password_hash: passwordHash,
-          cuenta_activa: false,
+          cuenta_activa: true,
           fecha_registro: new Date(),
         },
       });
 
-      this.logger.log(`Usuario creado: ${usuarioId}`);
+      this.logger.log(`Usuario registrado: ${usuarioId}`);
 
-      const jwtToken = this.generateVerificationToken(usuarioId);
-
-      await this.prisma.token.create({
-        data: {
-          id: uuidv4(),
-          token: jwtToken,
-          tipo: 'verificacion',
-          usuario_ID: usuarioId,
-          expira_en: new Date(Date.now() + 24 * 60 * 60 * 1000),
-          usado: false,
-        },
-      });
-
-      return { message: 'Cuenta creada. Revisa tu correo para confirmar.' };
+      return { message: 'Cuenta creada exitosamente. Ya puedes iniciar sesión.' };
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
 
@@ -88,7 +75,6 @@ export class AuthService {
         where: { email_hash: emailHash },
       });
 
-      // Mismo mensaje para usuario no encontrado y contraseña incorrecta (evita enumeración)
       if (!usuario) {
         throw new UnauthorizedException({ message: 'Credenciales inválidas' });
       }
@@ -99,21 +85,17 @@ export class AuthService {
       }
 
       if (!usuario.cuenta_activa) {
-        throw new UnauthorizedException({
-          message: 'Cuenta no verificada. Revisa tu correo para activarla.',
-        });
+        throw new UnauthorizedException({ message: 'Cuenta inactiva.' });
       }
 
-      // Generar token de acceso
       const accessToken = this.generateAccessToken(usuario.id);
 
-      // Guardar sesión en BD
       await this.prisma.sesion.create({
         data: {
           id: uuidv4(),
           usuario_ID: usuario.id,
           token: accessToken,
-          expira_en: new Date(Date.now() + 8 * 60 * 60 * 1000), // 8 horas
+          expira_en: new Date(Date.now() + 8 * 60 * 60 * 1000),
         },
       });
 
@@ -133,47 +115,10 @@ export class AuthService {
     return crypto.createHash('sha256').update(text).digest('hex');
   }
 
-  private generateVerificationToken(usuarioId: string): string {
-    const payload = { sub: usuarioId, type: 'verificacion' };
-    const secret = this.configService.get<string>('JWT_VERIFICATION_SECRET');
-    if (!secret) throw new Error('JWT_VERIFICATION_SECRET no configurado');
-    return this.jwtService.sign(payload, { secret, expiresIn: '24h' });
-  }
-
   private generateAccessToken(usuarioId: string): string {
     const payload = { sub: usuarioId, type: 'acceso' };
     const secret = this.configService.get<string>('JWT_SECRET');
     if (!secret) throw new Error('JWT_SECRET no configurado');
     return this.jwtService.sign(payload, { secret, expiresIn: '8h' });
-  }
-
-  async verifyEmail(token: string): Promise<{ message: string }> {
-    try {
-      const secret = this.configService.get<string>('JWT_VERIFICATION_SECRET');
-      const payload: any = this.jwtService.verify(token, { secret });
-
-      if (payload.type !== 'verificacion') {
-        throw new BadRequestException('Token inválido');
-      }
-
-      const savedToken = await this.prisma.token.findUnique({ where: { token } });
-
-      if (!savedToken) throw new BadRequestException('Token no encontrado');
-      if (savedToken.usado) throw new BadRequestException('Token ya fue utilizado');
-      if (new Date() > savedToken.expira_en) throw new BadRequestException('Token expirado');
-
-      await this.prisma.token.update({ where: { id: savedToken.id }, data: { usado: true } });
-      await this.prisma.usuario.update({ where: { id: payload.sub }, data: { cuenta_activa: true } });
-
-      this.logger.log(`Cuenta verificada: ${payload.sub}`);
-
-      return { message: 'Correo verificado exitosamente. Ya puedes iniciar sesión.' };
-    } catch (error) {
-      if (error instanceof BadRequestException) throw error;
-
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.logger.error(`Error verificando email: ${err.message}`);
-      throw new BadRequestException('Token inválido o expirado');
-    }
   }
 }

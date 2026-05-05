@@ -1,2 +1,2 @@
--- AlterTable
-ALTER TABLE `tokens` MODIFY `token` VARCHAR(512) NOT NULL;
+-- This migration is a no-op: superseded by the init migration rewrite.
+SELECT 1;

@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,30 +11,13 @@ model Usuario {
   id              String   @id @default(uuid())
   email_hash      String   @unique
   password_hash   String
-  cuenta_activa   Boolean  @default(false)
+  cuenta_activa   Boolean  @default(true)
   fecha_registro  DateTime @default(now())
-  
-  // Relaciones
-  tokens          Token[]
+
   sesiones        Sesion[]
   metas           MetaAceptada[]
-  
-  @@map("usuarios")
-}
 
-model Token {
-  id         String   @id @default(uuid())
-  token      String   @unique @db.VarChar(512)
-  tipo       String   // 'verificacion' o 'acceso'
-  usuario_ID String
-  expira_en  DateTime
-  usado      Boolean  @default(false)
-  creado_en  DateTime @default(now())
-  
-  // Relaciones
-  usuario    Usuario  @relation(fields: [usuario_ID], references: [id], onDelete: Cascade)
-  
-  @@map("tokens")
+  @@map("usuarios")
 }
 
 model Sesion {
@@ -46,10 +26,9 @@ model Sesion {
   token      String   @unique @db.VarChar(512)
   expira_en  DateTime
   creado_en  DateTime @default(now())
-  
-  // Relaciones
+
   usuario    Usuario  @relation(fields: [usuario_ID], references: [id], onDelete: Cascade)
-  
+
   @@map("sesiones")
 }
 
@@ -58,9 +37,8 @@ model MetaAceptada {
   usuario_ID String
   meta_id    String
   creado_en  DateTime @default(now())
-  
-  // Relaciones
+
   usuario    Usuario  @relation(fields: [usuario_ID], references: [id], onDelete: Cascade)
-  
+
   @@map("metas_aceptadas")
 }

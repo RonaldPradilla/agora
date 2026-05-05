@@ -32,7 +32,7 @@ export default function App() {
 
         {view === 'register' && (
           <>
-            <RegisterForm />
+            <RegisterForm onLogin={() => setView('login')} />
             <p className="auth-switch">
               ¿Ya tienes cuenta?{' '}
               <button className="link-btn" onClick={() => setView('login')}>

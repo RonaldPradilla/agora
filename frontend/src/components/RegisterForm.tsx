@@ -15,7 +15,11 @@ interface FormErrors {
   general?: string;
 }
 
-export default function RegisterForm() {
+interface Props {
+  onLogin?: () => void;
+}
+
+export default function RegisterForm({ onLogin }: Props) {
   const [form, setForm] = useState<FormState>({
     email: '',
     password: '',
@@ -41,6 +45,8 @@ export default function RegisterForm() {
       const res = await register(form);
       setSuccess(res.message);
       setForm({ email: '', password: '', confirmPassword: '' });
+      // La cuenta ya está activa — redirigir al login tras 2s
+      setTimeout(() => onLogin?.(), 2000);
     } catch (err) {
       const extracted = extractErrors(err);
 
